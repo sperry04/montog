@@ -14,9 +14,12 @@ Based loosely on monitor-switch by Rodrigo Silva (MestreLion)
 * Only works with X11, Wayland is not supported
 
 ## Usage
-Run from the command line with `$ montog.py` or `$ python3 montog.py`.
 
-The montog menu will launch in the Gnome top bar.
+## GTK Top Bar Menu
+Run from the command line with `$ montog.py` or `$ python3 montog.py`.  The montog menu will launch in the Gnome top bar.
+
+## Command Line Interface
+Additionally, you can directly trigger an arrangement on the CLI with `$ montog.py -a <name>` where `<name>` is the name of the arrangement from the config file (see below).
 
 ### Arrangements
 The menu consists of a list of monitor _arrangements_ that can be quickly toggled.  Arrangements are intended to represent:
@@ -56,7 +59,7 @@ To properly configure montog, create a `montog-config.yaml` file in `~/.config/`
 ### Configuration File Format
 The config file is standard YAML with two necessary blocks:
 * `monitors` - Maps alias names to the monitor `id` and any additional `options` you wish to pass to `xrandr` when enabling the monitor, such as resolution, frame rate, etc.
-* `arrangements` - Maps an arrangement name (which is used in the drop down menu) to a list of `enabled` monitor aliases (as defined in the `monitors` block) and a `primary` alias to indicate which monitor should be set as the primary.
+* `arrangements` - Maps an arrangement name (which is used in the drop down menu) to a list of `enabled` monitor aliases (as defined in the `monitors` block) and a `primary` alias to indicate which monitor should be set as the primary.  The optional `label` allows a label on the menu item that is different from the arrangement's name.
 
 ### Configuration Example:
 Note the use of unicode Emojis for iconography in the menu.
@@ -73,7 +76,7 @@ Note the use of unicode Emojis for iconography in the menu.
 # monitors block to match the IDs show in the About dialog, paying attention
 # to match the IDs with the positional alias names (left/center/right).
 #
-# Emojis are used in the arrangement names as iconography to make the menu
+# Emojis are used in the arrangement labels as iconography to make the menu
 # clearer when switching active monitors.
 
 # monitor aliases
@@ -94,19 +97,24 @@ monitors:
 #   maps arrangement name to list of enabled monitors
 #   (in left-to-right order) and a primary monitor
 arrangements:
-    "🖥️ 🚫 🚫  Left":
+    "left":
+        label: "🖥️ 🚫 🚫  Left"
         enabled: [ "left" ]
         primary: "left"
-    "🖥️ 🖥️ 🚫  Left Two":
+    "left-center":
+        label: "🖥️ 🖥️ 🚫  Left Two"
         enabled: [ "left", "center" ]
-        primary: "center"
-    "🖥️ 🖥️ 🖥️  All Monitors":
+        primary: "left"
+    "all":
+        label: "🖥️ 🖥️ 🖥️  All Monitors"
         enabled: [ "left", "center", "right" ]
         primary: "center"
-    "🚫 🖥️ 🖥️  Right Two":
+    "center-right":
+        label: "🚫 🖥️ 🖥️  Right Two"
         enabled: [ "center", "right" ]
         primary: "center"
-    "🚫 🚫 🖥️  Right":
+    "right":
+        label: "🚫 🚫 🖥️  Right"
         enabled: [ "right" ]
         primary: "right"
 ```

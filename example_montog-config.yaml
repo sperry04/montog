@@ -30,18 +30,23 @@ monitors:
 #   maps arrangement name to list of enabled monitors
 #   (in left-to-right order) and a primary monitor
 arrangements:
-    "🖥️ 🚫 🚫  Left":
+    "left":
+        label: "🖥️ 🚫 🚫  Left"
         enabled: [ "left" ]
         primary: "left"
-    "🖥️ 🖥️ 🚫  Left Two":
+    "left-center":
+        label: "🖥️ 🖥️ 🚫  Left Two"
         enabled: [ "left", "center" ]
-        primary: "center"
-    "🖥️ 🖥️ 🖥️  All Monitors":
+        primary: "left"
+    "all":
+        label: "🖥️ 🖥️ 🖥️  All Monitors"
         enabled: [ "left", "center", "right" ]
         primary: "center"
-    "🚫 🖥️ 🖥️  Right Two":
+    "center-right":
+        label: "🚫 🖥️ 🖥️  Right Two"
         enabled: [ "center", "right" ]
         primary: "center"
-    "🚫 🚫 🖥️  Right":
+    "right":
+        label: "🚫 🚫 🖥️  Right"
         enabled: [ "right" ]
         primary: "right"

@@ -26,9 +26,11 @@ gi.require_version("AppIndicator3", "0.1")
 from gi.repository import Gtk
 from gi.repository import AppIndicator3 as appindicator
 
-from typing import Union
+from argparse import ArgumentParser
 import subprocess
+import psutil
 import yaml
+import sys
 import os
 
 
@@ -49,6 +51,18 @@ Terminal=false
 Type=Application
 Icon=monitor
 """
+
+
+def already_running() -> bool:
+    """
+    Checks to see if the app is already running
+    """
+    name = os.path.basename(sys.argv[0])
+    pid = os.getpid()
+    for proc in psutil.process_iter(["pid", "name"]):
+        if proc.info["name"] == name and proc.info["pid"] != pid:
+            return True
+    return False
 
 
 def show_modal_dialog(text, title=None) -> Gtk.ResponseType:
@@ -174,8 +188,11 @@ def on_menu_show(menu) -> None:
 
     menu.foreach(lambda menu_item: menu.remove(menu_item))
 
-    for arrangement in config.get("arrangements", {}).keys():
-        menu_item = Gtk.MenuItem(label=arrangement)
+    for key, arrangement in config.get("arrangements", {}).items():
+        label = key
+        if "label" in arrangement:
+            label = arrangement["label"]
+        menu_item = Gtk.MenuItem(label=label)
         menu_item.connect("activate", on_menu_arrange)
         menu.append(menu_item)
 
@@ -203,15 +220,15 @@ def on_menu_show(menu) -> None:
 
     menu.show_all()
 
-
-def on_menu_arrange(item) -> None:
-    """
-    Handler called when an arrangement is selected,
-    calls xrandr to activate the configured monitors
-    """
+def arrange(name) -> bool:
     config = read_config()
+    
+    if name in config.get("arrangements", {}):
+        arrangement = config.get("arrangements", {}).get(name, {})
+    else:
+        return False
+
     xrandr = ["xrandr"]
-    arrangement = config.get("arrangements", {}).get(item.get_label(), {})
 
     # turn off all the disabled monitors
     for alias, monitor in config.get("monitors", {}).items():
@@ -233,19 +250,25 @@ def on_menu_arrange(item) -> None:
         last_mid = mid
         if alias == arrangement["primary"]:
             xrandr.extend(["--primary"])
-
     if last_mid is None:
         print("This arrangement would result in no enabled monitors! Aborting.")
         return
-
     try:
         # Run xrandr command to set active displays
         if True or show_modal_dialog(" ".join(xrandr), "Confirm?") == Gtk.ResponseType.OK:
             subprocess.check_call(xrandr)
-
     except subprocess.CalledProcessError as ex:
         # Handle any errors that occur when running the xrandr command
         print(f"Error running xrandr: {ex}")
+    return True
+
+
+def on_menu_arrange(item) -> None:
+    """
+    Handler called when an arrangement is selected,
+    calls xrandr to activate the configured monitors
+    """
+    arrange(item.get_label())
 
 
 def on_toggle_auto_start(item) -> None:
@@ -288,13 +311,8 @@ def on_toggle_install(item) -> None:
                 print(f"Error removing desktop file: {ex}")
 
 
-def on_menu_about(item) -> None:
-    """
-    Handler for the about menu,
-    displays the dialog with various information about the app/system
-    """
+def get_info() -> str:
     config = read_config()
-
     config_text = (
         yaml.safe_dump(
             {"monitors": config.get("monitors", []), "arrangements": config.get("arrangements", [])},
@@ -312,8 +330,7 @@ def on_menu_about(item) -> None:
         )
     )
 
-    show_modal_dialog(
-        f"""-----------------------------------------------------------
+    return f"""-----------------------------------------------------------
 {app_name} v{app_version}
 {app_desc}
 -----------------------------------------------------------
@@ -323,9 +340,15 @@ Monitors detected by xrandr:
 
 Configuration ({config.get("file", "unknown config file")}):
 {config_text}
-""",
-        "About",
-    )
+"""
+
+
+def on_menu_about(item) -> None:
+    """
+    Handler for the about menu,
+    displays the dialog with various information about the app/system
+    """
+    show_modal_dialog(get_info(), "About")
 
 
 def on_menu_quit(item) -> None:
@@ -336,7 +359,7 @@ def on_menu_quit(item) -> None:
     Gtk.main_quit()
 
 
-def main() -> None:
+def gtk() -> None:
     """
     Main application entry point
     """
@@ -347,8 +370,32 @@ def main() -> None:
 
     menu.connect("show", on_menu_show)
     indicator.set_menu(menu)
-    Gtk.main()
+    try:
+        Gtk.main()
+    except KeyboardInterrupt:
+        print(" exit")
+        exit()
 
 
 if __name__ == "__main__":
-    main()
+    
+    parser = ArgumentParser()
+    parser.add_argument("-a", "--arrange", dest="arrangement", help="enable the specified monitor arrangement")
+    parser.add_argument("-c", "--config", dest="config", help="specify the configuration file to load")
+    parser.add_argument("-i", "--info", dest="info", action="store_true", help="display the monitor/configuration info")
+    args = parser.parse_args()
+
+    if args.config:
+        config_filenames.insert(0, args.config)
+    if args.info:
+        print(get_info())
+        exit()
+    if args.arrangement:
+        if not arrange(args.arrangement):
+            print(f"Unknown arrangement name '{args.arrangement}'")
+        exit()
+
+    if already_running():
+        print(f"{app_name} is already running")
+    else:
+        gtk()
