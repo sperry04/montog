@@ -1,0 +1,47 @@
+# This example configuration file assumes a 3-monitor system with monitors 
+# at ID's DP-0, DP-2, and DP-3 in that order, naming them with the aliases 
+# "left", "center", and "right".
+#
+# It provides 5 arrangements for various 1, 2 or 3 enabled monitors, 
+# preferring the center or left monitors as primary.  
+#
+# To use this configuration file, put it in ~/.config/ and edit the 
+# monitors block to match the IDs show in the About dialog, paying attention
+# to match the IDs with the positional alias names (left/center/right).
+#
+# Emojis are used in the arrangement names as iconography to make the menu
+# clearer when switching active monitors.
+
+# monitor aliases
+#   maps alias name to monitor ID and any additional
+#   xrandr options required by the monitor
+monitors:
+    left: 
+        id: DP-0
+        options: ""
+    center:
+        id: DP-2
+        options: ""
+    right:
+        id: DP-4
+        options: ""
+
+# arrangements
+#   maps arrangement name to list of enabled monitors
+#   (in left-to-right order) and a primary monitor
+arrangements:
+    "🖥️ 🚫 🚫  Left":
+        enabled: [ "left" ]
+        primary: "left"
+    "🖥️ 🖥️ 🚫  Left Two":
+        enabled: [ "left", "center" ]
+        primary: "center"
+    "🖥️ 🖥️ 🖥️  All Monitors":
+        enabled: [ "left", "center", "right" ]
+        primary: "center"
+    "🚫 🖥️ 🖥️  Right Two":
+        enabled: [ "center", "right" ]
+        primary: "center"
+    "🚫 🚫 🖥️  Right":
+        enabled: [ "right" ]
+        primary: "right"
