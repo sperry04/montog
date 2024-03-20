@@ -4,6 +4,7 @@ Gnome app indicator tool to quickly toggle enabled monitor arrangements
 https://github.com/sperry04/montog
 
 Copyright (C) 2024 Scott Perry (sperry04)
+
 Based loosely on monitor-switch by Rodrigo Silva (MestreLion)
 
 ## Caveats
