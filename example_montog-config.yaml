@@ -5,11 +5,11 @@
 # It provides 5 arrangements for various 1, 2 or 3 enabled monitors, 
 # preferring the center or left monitors as primary.  
 #
-# To use this configuration file, put it in ~/.config/ and edit the 
-# monitors block to match the IDs show in the About dialog, paying attention
-# to match the IDs with the positional alias names (left/center/right).
+# To use this configuration file, put it in ~/.config/montog-config.yaml and
+# edit the monitors block to match the IDs show in the About dialog, paying 
+# attention to match the IDs with the positional alias names (left/center/right).
 #
-# Emojis are used in the arrangement names as iconography to make the menu
+# Emojis are used in the arrangement labels as iconography to make the menu
 # clearer when switching active monitors.
 
 # monitor aliases
@@ -31,22 +31,22 @@ monitors:
 #   (in left-to-right order) and a primary monitor
 arrangements:
     "left":
-        label: "🖥️ 🚫 🚫  Left"
+        label: "🖥️ ✖️ ✖️  Left"
         enabled: [ "left" ]
         primary: "left"
     "left-center":
-        label: "🖥️ 🖥️ 🚫  Left Two"
+        label: "🖥️ 🖥️ ✖️  Left Two"
         enabled: [ "left", "center" ]
-        primary: "left"
+        primary: "center"
     "all":
         label: "🖥️ 🖥️ 🖥️  All Monitors"
         enabled: [ "left", "center", "right" ]
         primary: "center"
     "center-right":
-        label: "🚫 🖥️ 🖥️  Right Two"
+        label: "✖️ 🖥️ 🖥️  Right Two"
         enabled: [ "center", "right" ]
         primary: "center"
     "right":
-        label: "🚫 🚫 🖥️  Right"
+        label: "✖️ ✖️ 🖥️  Right"
         enabled: [ "right" ]
         primary: "right"
