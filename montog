@@ -130,13 +130,14 @@ def read_config() -> dict:
     on detected monitors, returns the loaded config data
     """
     rval = None
-    filename = resolve_config_filename()
-    try:
-        with open(filename) as f:
-            rval = yaml.safe_load(f)
-            rval["file"] = filename
-    except Exception as ex:
-        print(f"Error reading '{filename}': {ex}")
+    config_filename = resolve_config_filename()
+    if config_filename:
+        try:
+            with open(config_filename) as f:
+                rval = yaml.safe_load(f)
+                rval["file"] = config_filename
+        except Exception as ex:
+            print(f"Error reading '{config_filename}': {ex}")
     if rval is None:
         # we never found a config file, use the connected monitors to make one up
         # monitors = {monitor.get("id"): {"id": monitor.get("id"), "options": ""} for monitor in get_connected_monitors()}
@@ -412,13 +413,10 @@ def gtk() -> None:
     menu.connect("show", on_menu_show)
     indicator.set_menu(menu)
 
-    # def config_changed(monitor, file, other_file, event_type):
-    #     if event_type == Gio.FileMonitorEvent.CHANGED:
-    #         on_menu_show(menu)
-    
-    config_file = Gio.File.new_for_path(resolve_config_filename())
-    monitor = config_file.monitor_file(Gio.FileMonitorFlags.NONE, None)
-    monitor.connect("changed", lambda m, f, of, event_type: on_menu_show(menu) if event_type == Gio.FileMonitorEvent.CHANGED else None)
+    config_filename = resolve_config_filename()
+    if config_filename:
+        monitor = Gio.File.new_for_path(config_filename).monitor_file(Gio.FileMonitorFlags.NONE, None)
+        monitor.connect("changed", lambda m, f, of, event_type: on_menu_show(menu) if event_type == Gio.FileMonitorEvent.CHANGED else None)
 
     try:
         Gtk.main()
