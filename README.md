@@ -13,16 +13,23 @@ Based loosely on monitor-switch by Rodrigo Silva (MestreLion)
 * Only works with X11, Wayland is not supported
 
 ## Usage
-Run from the command line with `$ montog.py` or `$ python3 montog.py`.
 
-The montog menu will launch in the Gnome top bar.
+## GTK Top Bar Menu
+Run from the command line with `$ montog.py` or `$ python3 montog.py`.  The montog menu will launch in the Gnome top bar.
+
+## Command Line Interface
+Running `$ montog.py` without command line parameters will launch the GTK top bar menu.  But it also supports a CLI mode with the following options:
+* `$ montog.py -h|--help` - displays CLI usage
+* `$ montog.py -i|--info` - displays the About information on the console
+* `$ montog.py -a|--arrange <name>` - directly activates the arrangement named `<name>` (see "Arrangements" below)
+* `$ montog.py -c|--config <filename>` - attempts to use the configuration file at `<filename>` before trying the default files or auto-generating a configuration
 
 ### Arrangements
 The menu consists of a list of monitor _arrangements_ that can be quickly toggled.  Arrangements are intended to represent:
 * a set of enabled monitors 
 * their order left-to-right (layouts with vertical components are not supported)
 * and a designated primary monitor
-so it's easy to directly select a specific layout with one click.
+so it's easy to directly select a specific layout with one click.  These arrangements can also be activated via the CLI `--arrange` parameter.
 
 ### Options
 There are several options that may be toggled on the menu:
@@ -55,7 +62,7 @@ To properly configure montog, create a `montog-config.yaml` file in `~/.config/`
 ### Configuration File Format
 The config file is standard YAML with two necessary blocks:
 * `monitors` - Maps alias names to the monitor `id` and any additional `options` you wish to pass to `xrandr` when enabling the monitor, such as resolution, frame rate, etc.
-* `arrangements` - Maps an arrangement name (which is used in the drop down menu) to a list of `enabled` monitor aliases (as defined in the `monitors` block) and a `primary` alias to indicate which monitor should be set as the primary.
+* `arrangements` - Maps an arrangement name (which is used in the drop down menu) to a list of `enabled` monitor aliases (as defined in the `monitors` block) and a `primary` alias to indicate which monitor should be set as the primary.  The optional `label` allows a label on the menu item that is different from the arrangement's name.
 
 ### Configuration Example:
 Note the use of unicode Emojis for iconography in the menu.
@@ -72,7 +79,7 @@ Note the use of unicode Emojis for iconography in the menu.
 # monitors block to match the IDs show in the About dialog, paying attention
 # to match the IDs with the positional alias names (left/center/right).
 #
-# Emojis are used in the arrangement names as iconography to make the menu
+# Emojis are used in the arrangement labels as iconography to make the menu
 # clearer when switching active monitors.
 
 # monitor aliases
@@ -93,19 +100,24 @@ monitors:
 #   maps arrangement name to list of enabled monitors
 #   (in left-to-right order) and a primary monitor
 arrangements:
-    "🖥️ 🚫 🚫  Left":
+    "left":
+        label: "🖥️ 🚫 🚫  Left"
         enabled: [ "left" ]
         primary: "left"
-    "🖥️ 🖥️ 🚫  Left Two":
+    "left-center":
+        label: "🖥️ 🖥️ 🚫  Left Two"
         enabled: [ "left", "center" ]
-        primary: "center"
-    "🖥️ 🖥️ 🖥️  All Monitors":
+        primary: "left"
+    "all":
+        label: "🖥️ 🖥️ 🖥️  All Monitors"
         enabled: [ "left", "center", "right" ]
         primary: "center"
-    "🚫 🖥️ 🖥️  Right Two":
+    "center-right":
+        label: "🚫 🖥️ 🖥️  Right Two"
         enabled: [ "center", "right" ]
         primary: "center"
-    "🚫 🚫 🖥️  Right":
+    "right":
+        label: "🚫 🚫 🖥️  Right"
         enabled: [ "right" ]
         primary: "right"
 ```

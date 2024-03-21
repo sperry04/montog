@@ -23,14 +23,18 @@ import gi
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("AppIndicator3", "0.1")
-from gi.repository import Gtk
+from gi.repository import Gtk, Gio
 from gi.repository import AppIndicator3 as appindicator
 
-from typing import Union
+from argparse import ArgumentParser, ArgumentTypeError
 import subprocess
+import psutil
 import yaml
+import sys
 import os
 
+
+## Global Settings
 
 app_name = "montog"
 app_desc = "Monitor Toggle: quickly switch active monitor arrangement"
@@ -50,6 +54,226 @@ Type=Application
 Icon=monitor
 """
 
+
+## Helpers
+
+def already_running() -> bool:
+    """
+    Checks to see if the app is already running
+    """
+    name = os.path.basename(sys.argv[0])
+    pid = os.getpid()
+    for proc in psutil.process_iter(["pid", "name"]):
+        if proc.info["name"] == name and proc.info["pid"] != pid:
+            return True
+    return False
+
+
+def str_to_bool(value):
+    """
+    Converts various string representations to a bool True/False value
+    """
+    if isinstance(value, bool):
+        return value
+    if value.lower() in ('yes', 'true', 't', 'y', '1', 'enable', 'enabled'):
+        return True
+    elif value.lower() in ('no', 'false', 'f', 'n', '0', 'disable', 'disabled'):
+        return False
+    else:
+        raise ArgumentTypeError('Boolean value expected.')
+
+
+def resolve_config_filename() -> str:
+    """
+    Uses the list of possible config files to find the best filename, or None
+    """
+    for filename in config_filenames:
+        if os.path.exists(filename):
+            return filename
+    return None
+
+
+## Primary Functionality
+
+def get_connected_monitors() -> list:
+    """
+    Uses xrandr to get a list of connected monitor IDs
+    """
+    try:
+        rval = []
+
+        # Run the xrandr --listmonitors command to get the enabled monitors
+        for line in subprocess.check_output(["xrandr", "--listmonitors"], text=True).strip().splitlines()[1:]:
+            # Extract monitor name and position information
+            parts = line.strip().split()
+            rval.append({"id": parts[3], "pos": parts[2].split("+")[-2], "enabled": True, "primary": parts[1].startswith("+*")})
+
+        # sort the enabled monitors by position
+        rval = sorted(rval, key=lambda monitor: monitor["pos"])
+
+        # Run xrandr command to get disabled monitors
+        for line in subprocess.check_output(["xrandr"], text=True).strip().splitlines():
+            # Check if the line contains information about a connected monitor
+            if " connected" in line:
+                mid = line.split()[0]
+                if mid not in [monitor["id"] for monitor in rval]:
+                    rval.append({"id": mid, "pos": None, "enabled": False, "primary": False})
+        return rval
+    except subprocess.CalledProcessError as ex:
+        print(f"Error running xrandr: {ex}")
+        return []
+
+
+def read_config() -> dict:
+    """
+    Reads the config file, looking in multiple places before using a default config based
+    on detected monitors, returns the loaded config data
+    """
+    rval = None
+    filename = resolve_config_filename()
+    try:
+        with open(filename) as f:
+            rval = yaml.safe_load(f)
+            rval["file"] = filename
+    except Exception as ex:
+        print(f"Error reading '{filename}': {ex}")
+    if rval is None:
+        # we never found a config file, use the connected monitors to make one up
+        # monitors = {monitor.get("id"): {"id": monitor.get("id"), "options": ""} for monitor in get_connected_monitors()}
+        monitors = get_connected_monitors()
+        rval = {
+            "monitors": {monitor.get("id"): {"id": monitor.get("id"), "options": ""} for monitor in monitors},
+            "arrangements": {
+                ("🖥️ " * len(monitors))
+                + "All Monitors": {
+                    "enabled": [monitor.get("id") for monitor in monitors],
+                    "primary": next(monitor.get("id") for monitor in monitors if monitor.get("primary", False)),
+                }
+            },
+            "file": f"This is an auto-generated configuration, please create your own config file at {config_filenames[0]}",
+        }
+        for monitor in monitors:
+            rval["arrangements"].update({"🖥️ " + monitor.get("id"): {"enabled": [monitor.get("id")], "primary": monitor.get("id")}})
+    return rval
+
+
+def arrange(name) -> bool:
+    config = read_config()
+    
+    if name in config.get("arrangements", {}):
+        arrangement = config.get("arrangements", {}).get(name, {})
+    else:
+        return False
+
+    xrandr = ["xrandr"]
+
+    # turn off all the disabled monitors
+    for alias, monitor in config.get("monitors", {}).items():
+        if alias not in arrangement.get("enabled", []):
+            xrandr.extend(["--output", monitor.get("id", "unknown_id"), "--off"])
+
+    # turn on the enabled monitors
+    last_mid = None
+    for alias in arrangement.get("enabled", []):
+        mid = config.get("monitors", {}).get(alias, {}).get("id", "unknown_id")
+        xrandr.extend(["--output", mid, "--auto"])
+        options = config.get("monitors", {}).get(alias, {}).get("options", "")
+        if options:
+            xrandr.extend(options.split())
+        if last_mid is None:
+            xrandr.extend(["--pos", "0x0"])
+        else:
+            xrandr.extend(["--right-of", last_mid])
+        last_mid = mid
+        if alias == arrangement["primary"]:
+            xrandr.extend(["--primary"])
+    if last_mid is None:
+        print("This arrangement would result in no enabled monitors! Aborting.")
+        return
+    try:
+        # Run xrandr command to set active displays
+        if True or show_modal_dialog(" ".join(xrandr), "Confirm?") == Gtk.ResponseType.OK:
+            subprocess.check_call(xrandr)
+    except subprocess.CalledProcessError as ex:
+        # Handle any errors that occur when running the xrandr command
+        print(f"Error running xrandr: {ex}")
+    return True
+
+
+def toggle_auto_start(auto_start) -> None:
+    if auto_start:
+        if not os.path.exists(autostart_filename):
+            try:
+                dir = os.path.dirname(autostart_filename)
+                if not os.path.exists(dir):
+                    os.makedirs(dir)
+                with open(autostart_filename, "w") as file:
+                    file.write(desktop_file_contents)
+            except Exception as ex:
+                print(f"Error writing desktop file: {ex}")
+    else:
+        if os.path.exists(autostart_filename):
+            try:
+                os.remove(autostart_filename)
+            except OSError as ex:
+                print(f"Error removing desktop file: {ex}")
+
+
+def toggle_app_install(installed) -> None:
+    if installed:
+        if not os.path.exists(install_filename):
+            try:
+                dir = os.path.dirname(install_filename)
+                if not os.path.exists(dir):
+                    os.makedirs(dir)
+                with open(install_filename, "w") as file:
+                    file.write(desktop_file_contents)
+            except Exception as ex:
+                print(f"Error writing desktop file: {ex}")
+    else:
+        if os.path.exists(install_filename):
+            try:
+                os.remove(install_filename)
+            except OSError as ex:
+                print(f"Error removing desktop file: {ex}")
+
+
+def get_info() -> str:
+    config = read_config()
+    config_text = (
+        yaml.safe_dump(
+            {"monitors": config.get("monitors", []), "arrangements": config.get("arrangements", [])},
+            indent=8,
+            sort_keys=False,
+            allow_unicode=True,
+        )
+        .replace(
+            "monitors:",
+            "\n    # monitor aliases\n    #   maps alias name to monitor ID and any additional\n    #   xrandr options required by the monitor\n    monitors:",
+        )
+        .replace(
+            "arrangements:",
+            "\n    # arrangements\n    #   maps arrangement name to list of enabled monitors\n    #   (in left-to-right order) and a primary monitor\n    arrangements:",
+        )
+    )
+
+    return f"""-----------------------------------------------------------
+{app_name} v{app_version}
+{app_desc}
+-----------------------------------------------------------
+
+Monitors detected by xrandr:
+{yaml.safe_dump(get_connected_monitors(), indent=4, sort_keys=False, allow_unicode=True)}
+
+Configuration ({config.get("file", "unknown config file")}):
+{config_text}
+"""
+
+
+
+
+
+## GTK Menu
 
 def show_modal_dialog(text, title=None) -> Gtk.ResponseType:
     """
@@ -101,82 +325,23 @@ def show_modal_dialog(text, title=None) -> Gtk.ResponseType:
     return rval
 
 
-def get_connected_monitors() -> list:
-    """
-    Uses xrandr to get a list of connected monitor IDs
-    """
-    try:
-        rval = []
-
-        # Run the xrandr --listmonitors command to get the enabled monitors
-        for line in subprocess.check_output(["xrandr", "--listmonitors"], text=True).strip().splitlines()[1:]:
-            # Extract monitor name and position information
-            parts = line.strip().split()
-            rval.append({"id": parts[3], "pos": parts[2].split("+")[-2], "enabled": True, "primary": parts[1].startswith("+*")})
-
-        # sort the enabled monitors by position
-        rval = sorted(rval, key=lambda monitor: monitor["pos"])
-
-        # Run xrandr command to get disabled monitors
-        for line in subprocess.check_output(["xrandr"], text=True).strip().splitlines():
-            # Check if the line contains information about a connected monitor
-            if " connected" in line:
-                mid = line.split()[0]
-                if mid not in [monitor["id"] for monitor in rval]:
-                    rval.append({"id": mid, "pos": None, "enabled": False, "primary": False})
-        return rval
-    except subprocess.CalledProcessError as ex:
-        print(f"Error running xrandr: {ex}")
-        return []
-
-
-def read_config() -> dict:
-    """
-    Reads the config file, looking in multiple places before using a default config based
-    on detected monitors, returns the loaded config data
-    """
-    rval = None
-    for filename in config_filenames:
-        try:
-            with open(filename) as f:
-                rval = yaml.safe_load(f)
-                rval["file"] = filename
-                break  # no need to try the next filename
-        except Exception as ex:
-            print(f"Error loading '{filename}': {ex}")
-            continue  # try the next filename
-    if rval is None:
-        # we never found a config file, use the connected monitors to make one up
-        # monitors = {monitor.get("id"): {"id": monitor.get("id"), "options": ""} for monitor in get_connected_monitors()}
-        monitors = get_connected_monitors()
-        rval = {
-            "monitors": {monitor.get("id"): {"id": monitor.get("id"), "options": ""} for monitor in monitors},
-            "arrangements": {
-                ("🖥️ " * len(monitors))
-                + "All Monitors": {
-                    "enabled": [monitor.get("id") for monitor in monitors],
-                    "primary": next(monitor.get("id") for monitor in monitors if monitor.get("primary", False)),
-                }
-            },
-            "file": f"This is an auto-generated configuration, please create your own config file at {config_filenames[0]}",
-        }
-        for monitor in monitors:
-            rval["arrangements"].update({"🖥️ " + monitor.get("id"): {"enabled": [monitor.get("id")], "primary": monitor.get("id")}})
-    return rval
-
-
 def on_menu_show(menu) -> None:
     """
     Handler called just before the app indicator menu is shown,
     updates the menu with the arrangements from the current config
     """
+    print("building menu")
     config = read_config()
 
     menu.foreach(lambda menu_item: menu.remove(menu_item))
 
-    for arrangement in config.get("arrangements", {}).keys():
-        menu_item = Gtk.MenuItem(label=arrangement)
-        menu_item.connect("activate", on_menu_arrange)
+    for key, arrangement in config.get("arrangements", {}).items():
+        label = key
+        if "label" in arrangement:
+            label = arrangement["label"]
+        menu_item = Gtk.MenuItem(label=label)
+        menu_item.arrangement = key
+        menu_item.connect("activate", on_menu_arrange)        
         menu.append(menu_item)
 
     menu.append(Gtk.SeparatorMenuItem())
@@ -209,83 +374,15 @@ def on_menu_arrange(item) -> None:
     Handler called when an arrangement is selected,
     calls xrandr to activate the configured monitors
     """
-    config = read_config()
-    xrandr = ["xrandr"]
-    arrangement = config.get("arrangements", {}).get(item.get_label(), {})
-
-    # turn off all the disabled monitors
-    for alias, monitor in config.get("monitors", {}).items():
-        if alias not in arrangement.get("enabled", []):
-            xrandr.extend(["--output", monitor.get("id", "unknown_id"), "--off"])
-
-    # turn on the enabled monitors
-    last_mid = None
-    for alias in arrangement.get("enabled", []):
-        mid = config.get("monitors", {}).get(alias, {}).get("id", "unknown_id")
-        xrandr.extend(["--output", mid, "--auto"])
-        options = config.get("monitors", {}).get(alias, {}).get("options", "")
-        if options:
-            xrandr.extend(options.split())
-        if last_mid is None:
-            xrandr.extend(["--pos", "0x0"])
-        else:
-            xrandr.extend(["--right-of", last_mid])
-        last_mid = mid
-        if alias == arrangement["primary"]:
-            xrandr.extend(["--primary"])
-
-    if last_mid is None:
-        print("This arrangement would result in no enabled monitors! Aborting.")
-        return
-
-    try:
-        # Run xrandr command to set active displays
-        if True or show_modal_dialog(" ".join(xrandr), "Confirm?") == Gtk.ResponseType.OK:
-            subprocess.check_call(xrandr)
-
-    except subprocess.CalledProcessError as ex:
-        # Handle any errors that occur when running the xrandr command
-        print(f"Error running xrandr: {ex}")
+    arrange(item.arrangement)
 
 
 def on_toggle_auto_start(item) -> None:
-    if item.get_active():
-        if not os.path.exists(autostart_filename):
-            try:
-                dir = os.path.dirname(autostart_filename)
-                if not os.path.exists(dir):
-                    os.makedirs(dir)
-                with open(autostart_filename, "w") as file:
-                    file.write(desktop_file_contents)
-                # os.chmod(desktop_filename, 0o755)
-            except Exception as ex:
-                print(f"Error writing desktop file: {ex}")
-    else:
-        if os.path.exists(autostart_filename):
-            try:
-                os.remove(autostart_filename)
-            except OSError as ex:
-                print(f"Error removing desktop file: {ex}")
+    toggle_auto_start(item.get_active())
 
 
 def on_toggle_install(item) -> None:
-    if item.get_active():
-        if not os.path.exists(install_filename):
-            try:
-                dir = os.path.dirname(install_filename)
-                if not os.path.exists(dir):
-                    os.makedirs(dir)
-                with open(install_filename, "w") as file:
-                    file.write(desktop_file_contents)
-                # os.chmod(desktop_filename, 0o755)
-            except Exception as ex:
-                print(f"Error writing desktop file: {ex}")
-    else:
-        if os.path.exists(install_filename):
-            try:
-                os.remove(install_filename)
-            except OSError as ex:
-                print(f"Error removing desktop file: {ex}")
+    toggle_app_install(item.get_active())
 
 
 def on_menu_about(item) -> None:
@@ -293,39 +390,7 @@ def on_menu_about(item) -> None:
     Handler for the about menu,
     displays the dialog with various information about the app/system
     """
-    config = read_config()
-
-    config_text = (
-        yaml.safe_dump(
-            {"monitors": config.get("monitors", []), "arrangements": config.get("arrangements", [])},
-            indent=8,
-            sort_keys=False,
-            allow_unicode=True,
-        )
-        .replace(
-            "monitors:",
-            "\n    # monitor aliases\n    #   maps alias name to monitor ID and any additional\n    #   xrandr options required by the monitor\n    monitors:",
-        )
-        .replace(
-            "arrangements:",
-            "\n    # arrangements\n    #   maps arrangement name to list of enabled monitors\n    #   (in left-to-right order) and a primary monitor\n    arrangements:",
-        )
-    )
-
-    show_modal_dialog(
-        f"""-----------------------------------------------------------
-{app_name} v{app_version}
-{app_desc}
------------------------------------------------------------
-
-Monitors detected by xrandr:
-{yaml.safe_dump(get_connected_monitors(), indent=4, sort_keys=False, allow_unicode=True)}
-
-Configuration ({config.get("file", "unknown config file")}):
-{config_text}
-""",
-        "About",
-    )
+    show_modal_dialog(get_info(), "About")
 
 
 def on_menu_quit(item) -> None:
@@ -336,7 +401,7 @@ def on_menu_quit(item) -> None:
     Gtk.main_quit()
 
 
-def main() -> None:
+def gtk() -> None:
     """
     Main application entry point
     """
@@ -344,11 +409,61 @@ def main() -> None:
     indicator.set_status(appindicator.IndicatorStatus.ACTIVE)
 
     menu = Gtk.Menu()
-
     menu.connect("show", on_menu_show)
     indicator.set_menu(menu)
-    Gtk.main()
+
+    # def config_changed(monitor, file, other_file, event_type):
+    #     if event_type == Gio.FileMonitorEvent.CHANGED:
+    #         on_menu_show(menu)
+    
+    config_file = Gio.File.new_for_path(resolve_config_filename())
+    monitor = config_file.monitor_file(Gio.FileMonitorFlags.NONE, None)
+    monitor.connect("changed", lambda m, f, of, event_type: on_menu_show(menu) if event_type == Gio.FileMonitorEvent.CHANGED else None)
+
+    try:
+        Gtk.main()
+    except KeyboardInterrupt:
+        print(" exit")
+        exit()
 
 
 if __name__ == "__main__":
-    main()
+    
+    parser = ArgumentParser()
+    parser.add_argument("-a", "--arrange", dest="arrangement", help="enable the specified monitor arrangement")
+    parser.add_argument("-c", "--config", dest="config", help="specify the configuration file to load")
+    parser.add_argument("-i", "--info", dest="info", action="store_true", help="display the monitor/configuration info")
+    parser.add_argument("--autostart", dest="autostart", type=str_to_bool, nargs="?", choices=[True, False], const=True, default=None, help="enables/disables automatic starting of the app upon login")
+    parser.add_argument("--install", dest="install", type=str_to_bool, nargs="?", choices=[True, False],  const=True, default=None, help="installs/removes an application desktop file")
+    args = parser.parse_args()
+
+    launch_gtk = True
+
+    if args.config:
+        config_filenames.insert(0, args.config)
+    
+    if args.info:
+        print(get_info())
+        launch_gtk = False
+    
+    if args.autostart is not None:
+        toggle_auto_start(args.autostart)
+        print(f"Autostart {'enabled' if args.autostart else 'disabled'}")
+        launch_gtk = False
+    
+    if args.install is not None:
+        toggle_app_install(args.install)
+        print(f"Application desktop file {'installed' if args.install else 'removed'}")
+        launch_gtk = False
+    
+    if args.arrangement:
+        print(f"Activating arrangement '{args.arrangement}'...")
+        if not arrange(args.arrangement):
+            print(f"Unknown arrangement name '{args.arrangement}'")
+        launch_gtk = False
+
+    if launch_gtk:
+        if already_running():
+            print(f"{app_name} is already running")
+        else:
+            gtk()
