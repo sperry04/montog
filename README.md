@@ -1,6 +1,8 @@
 # montog - Monitor Toggle
 Gnome app indicator tool to quickly toggle enabled monitor arrangements
 
+![Screenshot]()
+
 https://github.com/sperry04/montog
 
 Copyright (C) 2024 Scott Perry (sperry04)
@@ -15,14 +17,16 @@ Based loosely on monitor-switch by Rodrigo Silva (MestreLion)
 # Usage
 
 ## GTK Top Bar Menu
-Run from the command line with `$ montog.py` or `$ python3 montog.py`.  The montog menu will launch in the Gnome top bar.
+Run from the command line with `$ montog` or `$ python3 montog`.  The montog menu (🖥️) will launch in the Gnome top bar.
 
 ## Command Line Interface
-Running `$ montog.py` without command line parameters will launch the GTK top bar menu.  But it also supports a CLI mode with the following options:
-* `$ montog.py -h|--help` - displays CLI usage
-* `$ montog.py -i|--info` - displays the About information on the console
-* `$ montog.py -a|--arrange <name>` - directly activates the arrangement named `<name>` (see "Arrangements" below)
-* `$ montog.py -c|--config <filename>` - attempts to use the configuration file at `<filename>` before trying the default files or auto-generating a configuration
+Running `montog` without command line parameters will launch the top bar menu.  But it also supports a CLI mode if any of the following options are specified:
+* `$ montog -h|--help` - displays CLI usage
+* `$ montog -i|--info` - displays the About information on the console
+* `$ montog -a|--arrange <name>` - directly activates the arrangement named `<name>` (see "Arrangements" below)
+* `$ montog -c|--config <filename>` - attempts to use the configuration file at `<filename>` before trying the default files or auto-generating a configuration
+* `$ montog --autostart [True|False]` - enables/disables autostart by creating/removing a `montog.desktop` file in `~/.config/autostart/`
+* `$ montog --config [True|False]` - enables/disables in the applications menu by creating/removing a `montog.desktop` file in `~/.local/share/applications/`
 
 ### Arrangements
 The menu consists of a list of monitor _arrangements_ that can be quickly toggled.  Arrangements are intended to represent:
@@ -57,7 +61,8 @@ The first time you run montog, you can "install" it by checking the "Auto-start 
 ## Configuration
 By default, montog will detect your connected (both enabled and disabled) monitors, including your primary monitor, and auto-generate a configuration for enabling all monitors, or each monitor singularly.  However, it cannot detect the correct left-to-right order for monitors that are disabled.
 
-To properly configure montog, create a `montog-config.yaml` file in `~/.config/`, or in the same directory as `montog.py`.  An `example_montog-config.yaml` file is provided as a reference, and included in the documentation below.  The configuration file is loaded every time the menu is opened, so you may modify the file without needed to restart the application.  An illegal configuration file will cause the application to revert to the auto-generated configuration.
+To properly configure montog, create a `montog-config.yaml` file in `~/.config/`, or in the same directory as `montog.py`.  An `example_montog-config.yaml` file is provided as a reference, and included in the documentation below.  The configuration file is loaded every time the menu is opened, so you may modify the file without needed to restart the application.  An illegal configuration file will cause the application to revert to the auto-generated configuration.![Screenshot from 2024-03-20 21-33-50](https://github.com/sperry04/montog/assets/8670817/a866ac2c-66aa-4f76-b5d9-21e40c272026)
+
 
 ### Configuration File Format
 The config file is standard YAML with two necessary blocks:
