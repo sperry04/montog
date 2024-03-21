@@ -1,7 +1,7 @@
 # montog - Monitor Toggle
 Gnome app indicator tool to quickly toggle enabled monitor arrangements
 
-![Screenshot]()
+![Screenshot](https://github.com/sperry04/montog/assets/8670817/bf8f5a9e-e8af-4411-a30d-52f24e9a76c3)
 
 https://github.com/sperry04/montog
 
