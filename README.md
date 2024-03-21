@@ -19,14 +19,18 @@ Based loosely on monitor-switch by Rodrigo Silva (MestreLion)
 Run from the command line with `$ montog.py` or `$ python3 montog.py`.  The montog menu will launch in the Gnome top bar.
 
 ## Command Line Interface
-Additionally, you can directly trigger an arrangement on the CLI with `$ montog.py -a <name>` where `<name>` is the name of the arrangement from the config file (see below).
+Running `$ montog.py` without command line parameters will launch the GTK top bar menu.  But it also supports a CLI mode with the following options:
+* `$ montog.py -h|--help` - displays CLI usage
+* `$ montog.py -i|--info` - displays the About information on the console
+* `$ montog.py -a|--arrange <name>` - directly activates the arrangement named `<name>` (see "Arrangements" below)
+* `$ montog.py -c|--config <filename>` - attempts to use the configuration file at `<filename>` before trying the default files or auto-generating a configuration
 
 ### Arrangements
 The menu consists of a list of monitor _arrangements_ that can be quickly toggled.  Arrangements are intended to represent:
 * a set of enabled monitors 
 * their order left-to-right (layouts with vertical components are not supported)
 * and a designated primary monitor
-so it's easy to directly select a specific layout with one click.
+so it's easy to directly select a specific layout with one click.  These arrangements can also be activated via the CLI `--arrange` parameter.
 
 ### Options
 There are several options that may be toggled on the menu:
