@@ -7,12 +7,12 @@ Copyright (C) 2024 Scott Perry (sperry04)
 
 Based loosely on monitor-switch by Rodrigo Silva (MestreLion)
 
-## Caveats
+### Caveats
 * Developed and tested on Ubuntu 22.04 LTS / Gnome 42.9
 * Uses `xrandr` for enabling/disabling monitors
 * Only works with X11, Wayland is not supported
 
-## Usage
+# Usage
 
 ## GTK Top Bar Menu
 Run from the command line with `$ montog.py` or `$ python3 montog.py`.  The montog menu will launch in the Gnome top bar.
