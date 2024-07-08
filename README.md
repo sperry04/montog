@@ -26,7 +26,7 @@ Running `montog` without command line parameters will launch the top bar menu.  
 * `$ montog -a|--arrange <name>` - directly activates the arrangement named `<name>` (see "Arrangements" below)
 * `$ montog -c|--config <filename>` - attempts to use the configuration file at `<filename>` before trying the default files or auto-generating a configuration
 * `$ montog --autostart [True|False]` - enables/disables autostart by creating/removing a `montog.desktop` file in `~/.config/autostart/`
-* `$ montog --config [True|False]` - enables/disables in the applications menu by creating/removing a `montog.desktop` file in `~/.local/share/applications/`
+* `$ montog --install [True|False]` - enables/disables in the applications menu by creating/removing a `montog.desktop` file in `~/.local/share/applications/`
 
 ### Arrangements
 The menu consists of a list of monitor _arrangements_ that can be quickly toggled.  Arrangements are intended to represent:
