@@ -20,6 +20,7 @@
 #   along with this program. See <http://www.gnu.org/licenses/gpl.html>
 
 import gi
+import pydbus
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("AppIndicator3", "0.1")
@@ -38,7 +39,7 @@ import os
 
 app_name = "montog"
 app_desc = "Monitor Toggle: quickly switch active monitor arrangement"
-app_version = "0.1"
+app_version = "0.2"
 home_dir = os.path.expanduser("~")
 config_filenames = [f"{home_dir}/.config/{app_name}-config.yaml", f"./{app_name}-config.yaml"]
 autostart_filename = f"{home_dir}/.config/autostart/{app_name}.desktop"
@@ -75,12 +76,12 @@ def str_to_bool(value):
     """
     if isinstance(value, bool):
         return value
-    if value.lower() in ('yes', 'true', 't', 'y', '1', 'enable', 'enabled'):
+    if value.lower() in ("yes", "true", "t", "y", "1", "enable", "enabled"):
         return True
-    elif value.lower() in ('no', 'false', 'f', 'n', '0', 'disable', 'disabled'):
+    elif value.lower() in ("no", "false", "f", "n", "0", "disable", "disabled"):
         return False
     else:
-        raise ArgumentTypeError('Boolean value expected.')
+        raise ArgumentTypeError("Boolean value expected.")
 
 
 def resolve_config_filename() -> str:
@@ -95,7 +96,100 @@ def resolve_config_filename() -> str:
 
 ## Primary Functionality
 
-def get_connected_monitors() -> list:
+
+def get_display_config_dbus() -> dict:
+    """
+    Uses the DBus interface to get the current display configuration
+    """
+    try:
+        session_bus = pydbus.SessionBus()
+        session_bus_name = "org.gnome.Mutter.DisplayConfig"
+        session_bus_object = session_bus.get(session_bus_name, "/org/gnome/Mutter/DisplayConfig")
+        raw = session_bus_object.GetResources()
+        rval = {
+            "serial": raw[0],
+            "crtcs": {
+                crtc[0]: {
+                    "ID": crtc[0],
+                    "winsys_id": crtc[1],
+                    "x": crtc[2],
+                    "y": crtc[3],
+                    "width": crtc[4],
+                    "height": crtc[5],
+                    "mode": crtc[6],
+                    "current_transform": crtc[7],
+                    "possible_transforms": crtc[8],
+                    "properties": {
+                        k: v
+                        for k,v in crtc[9].items()
+                    }
+                }
+                for crtc in raw[1]
+            },
+            "outputs": {
+                output[0]: {
+                    "ID": output[0],
+                    "winsys_id": output[1],
+                    "current_crtc": output[2],
+                    "possible_crtcs": output[3],
+                    "name": output[4],
+                    "modes": output[5],
+                    "clones": output[6],
+                    "properties": {
+                        k: v
+                        for k,v in output[7].items()
+                    }
+                }
+                for output in raw[2]
+            },
+            "modes": {
+                mode[0]: {
+                    "ID": mode[0],
+                    "winsys_id": mode[1],
+                    "width": mode[2],
+                    "height": mode[3],
+                    "frequency": mode[4],
+                    "flags": mode[5]
+                }
+                for mode in raw[3]
+            },
+            "max_screen_width": raw[4],
+            "max_screen_height": raw[5]
+        }
+        from pprint import pprint
+        pprint(rval)
+        return rval
+    except Exception as ex:
+        print(f"Error getting display configuration from dbus: {ex}")
+        return None
+
+
+def get_connected_monitors_dbus() -> list:
+    """
+    Uses the DBus interface to get a list of connected monitor IDs
+    """
+    disp_config = get_display_config_dbus()
+    if disp_config is None:
+        return []
+    rval = []
+
+    # loop through the enabled monitors
+    for output in disp_config["outputs"].values():
+        if output["current_crtc"] != -1:
+            rval.append({"id": output["name"], "pos": disp_config["crtcs"].get(output["ID"], {}).get("x", None), "enabled": True, "primary": output["properties"].get("primary", False)})
+    # sort the enabled monitors by position
+    rval = sorted(rval, key=lambda monitor: monitor["pos"])
+
+    # loop through the disabled monitors
+    for output in disp_config["outputs"].values():
+        if output["current_crtc"] == -1:
+            rval.append({"id": output["name"], "pos": None, "enabled": False, "primary": False})
+            
+
+    return rval
+
+
+def get_connected_monitors_xrandr() -> list:
     """
     Uses xrandr to get a list of connected monitor IDs
     """
@@ -141,7 +235,7 @@ def read_config() -> dict:
     if rval is None:
         # we never found a config file, use the connected monitors to make one up
         # monitors = {monitor.get("id"): {"id": monitor.get("id"), "options": ""} for monitor in get_connected_monitors()}
-        monitors = get_connected_monitors()
+        monitors = get_connected_monitors_xrandr()
         rval = {
             "monitors": {monitor.get("id"): {"id": monitor.get("id"), "options": ""} for monitor in monitors},
             "arrangements": {
@@ -160,7 +254,7 @@ def read_config() -> dict:
 
 def arrange(name) -> bool:
     config = read_config()
-    
+
     if name in config.get("arrangements", {}):
         arrangement = config.get("arrangements", {}).get(name, {})
     else:
@@ -263,15 +357,15 @@ def get_info() -> str:
 {app_desc}
 -----------------------------------------------------------
 
+Monitors detected by dbus:
+{yaml.safe_dump(get_connected_monitors_dbus(), indent=4, sort_keys=False, allow_unicode=True)}
+
 Monitors detected by xrandr:
-{yaml.safe_dump(get_connected_monitors(), indent=4, sort_keys=False, allow_unicode=True)}
+{yaml.safe_dump(get_connected_monitors_xrandr(), indent=4, sort_keys=False, allow_unicode=True)}
 
 Configuration ({config.get("file", "unknown config file")}):
 {config_text}
 """
-
-
-
 
 
 ## GTK Menu
@@ -342,7 +436,7 @@ def on_menu_show(menu) -> None:
             label = arrangement["label"]
         menu_item = Gtk.MenuItem(label=label)
         menu_item.arrangement = key
-        menu_item.connect("activate", on_menu_arrange)        
+        menu_item.connect("activate", on_menu_arrange)
         menu.append(menu_item)
 
     menu.append(Gtk.SeparatorMenuItem())
@@ -426,34 +520,33 @@ def gtk() -> None:
 
 
 if __name__ == "__main__":
-    
     parser = ArgumentParser()
     parser.add_argument("-a", "--arrange", dest="arrangement", help="enable the specified monitor arrangement")
     parser.add_argument("-c", "--config", dest="config", help="specify the configuration file to load")
     parser.add_argument("-i", "--info", dest="info", action="store_true", help="display the monitor/configuration info")
     parser.add_argument("--autostart", dest="autostart", type=str_to_bool, nargs="?", choices=[True, False], const=True, default=None, help="enables/disables automatic starting of the app upon login")
-    parser.add_argument("--install", dest="install", type=str_to_bool, nargs="?", choices=[True, False],  const=True, default=None, help="installs/removes an application desktop file")
+    parser.add_argument("--install", dest="install", type=str_to_bool, nargs="?", choices=[True, False], const=True, default=None, help="installs/removes an application desktop file")
     args = parser.parse_args()
 
     launch_gtk = True
 
     if args.config:
         config_filenames.insert(0, args.config)
-    
+
     if args.info:
         print(get_info())
         launch_gtk = False
-    
+
     if args.autostart is not None:
         toggle_auto_start(args.autostart)
         print(f"Autostart {'enabled' if args.autostart else 'disabled'}")
         launch_gtk = False
-    
+
     if args.install is not None:
         toggle_app_install(args.install)
         print(f"Application desktop file {'installed' if args.install else 'removed'}")
         launch_gtk = False
-    
+
     if args.arrangement:
         print(f"Activating arrangement '{args.arrangement}'...")
         if not arrange(args.arrangement):
